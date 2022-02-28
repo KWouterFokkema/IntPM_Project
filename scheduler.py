@@ -53,7 +53,7 @@ class Instance:
 
 
 # Solves the problem exactly using binary ordering variables
-def solve(instance):
+def solve_ordering(instance):
     model = gb.Model()
 
     makespan_var = model.addVar(obj=1)
@@ -63,31 +63,47 @@ def solve(instance):
         for job in instance.jobs:
             starting_times_vars[(machine, job)] = model.addVar(name=f"starting time ({machine}, {job})")
 
-    # The job can only start if both the job and the machine are available.
+    # The job can only start if the job is finished on the previous machine.
     for machine, previous_machine in zip(instance.machines[1:], instance.machines[:-1]):
         for job in instance.jobs:
             model.addConstr(starting_times_vars[(machine, job)] >= starting_times_vars[(previous_machine, job)] + instance.processing_times[(previous_machine, job)])
 
     # Use the ordering variables with gurobi general constraints to enforce that jobs do not overlap
-    # TODO: For the first and last machine, the inequalities could be rewritten to equalities which gives better LP bounds
-    for machine in instance.machines:
+    order_vars = {}
+    for machine in instance.machines[1:-1]:
         for (job_1, job_2) in itertools.combinations(instance.jobs, 2):
-            order_var = model.addVar(name=f'order ({job_1}, {job_2})', vtype=gb.GRB.BINARY)
+            order_var = model.addVar(name=f'order ({machine}, {job_1}, {job_2})', vtype=gb.GRB.BINARY)
+            order_vars[(machine, job_1, job_2)] = order_var
+            order_vars[(machine, job_2, job_1)] = 1 - order_var
             model.addConstr((order_var == 1) >> (starting_times_vars[(machine, job_1)] + instance.processing_times[(machine, job_1)] <= starting_times_vars[(machine, job_2)]))
             model.addConstr((order_var == 0) >> (starting_times_vars[(machine, job_2)] + instance.processing_times[(machine, job_2)] <= starting_times_vars[(machine, job_1)]))
 
-    # TODO: the order of the first machine is the order of the second machine, and idem for the last two machines.
+    for (job_1, job_2) in itertools.combinations(instance.jobs, 2):
+        order_vars[(instance.machines[0], job_1, job_2)] = order_vars[(instance.machines[1], job_1, job_2)]
+        order_vars[(instance.machines[0], job_2, job_1)] = order_vars[(instance.machines[1], job_2, job_1)]
+        order_vars[(instance.machines[-1], job_1, job_2)] = order_vars[(instance.machines[-2], job_1, job_2)]
+        order_vars[(instance.machines[-1], job_2, job_1)] = order_vars[(instance.machines[-2], job_2, job_1)]
+
+    first_machine = instance.machines[0]
+    for job in instance.jobs:
+        model.addConstr(starting_times_vars[(first_machine, job)] == sum(order_vars[(first_machine, other_job, job)]*instance.processing_times[(first_machine, other_job)] for other_job in instance.jobs if other_job != job))
+
+    last_machine = instance.machines[-1]
+    for job in instance.jobs:
+        model.addConstr(starting_times_vars[(last_machine, job)] + instance.processing_times[(last_machine, job)] + sum(order_vars[(last_machine, job, other_job)] * instance.processing_times[(last_machine, other_job)] for other_job in instance.jobs if other_job != job) == makespan_var)
 
     # The makespan needs to be equal to the finishing time of the last job
     last_machine = instance.machines[-1]
     for job in instance.jobs:
         model.addConstr(makespan_var >= instance.processing_times[(last_machine, job)] + starting_times_vars[(last_machine, job)])
 
-    model.setParam('TimeLimit', 100)
+    model.setParam('TimeLimit', 10)
     model.optimize()  # Solve the model
 
     # Retrieve job starting times from the model
     starting_times = {}
+
+    # TODO: add cutting planes
 
     for machine in instance.machines:
         for job in instance.jobs:
@@ -214,7 +230,6 @@ def solve_permutation(instance):
     for machine in instance.machines:
         for job in instance.jobs:
             model.addConstr(sum(job_permutation_vars[(machine, job, virtual_job)] for virtual_job in instance.jobs) == 1)
-
     for machine in instance.machines:
         for virtual_job in instance.jobs:
             model.addConstr(sum(job_permutation_vars[(machine, job, virtual_job)] for job in instance.jobs) == 1)
@@ -271,6 +286,7 @@ def solve_permutation(instance):
     return starting_times, model.Status == gb.GRB.OPTIMAL  # If the model is optimal, the solution is optimal
 
 
+# Heuristic using the given (or standard) job order
 def basic_solution(instance, job_order=None):
     if job_order is None:
         job_order = instance.jobs[:]
@@ -323,7 +339,7 @@ def visualize(instance, starting_times, optimal=False):
 def main(input_path):
     instance = Instance(input_path)
     instance.print_lower_bounds()
-    starting_times, optimal = solve_permutation(instance)
+    starting_times, optimal = solve_ordering(instance)
     visualize(instance, starting_times, optimal=optimal)
 
 
