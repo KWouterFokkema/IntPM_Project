@@ -47,6 +47,28 @@ class Instance:
             print(f'Machine {machine}: lower bound = {lower_bound}, first job in {fastest_arriving_jobs}, last job in {fastest_leaving_jobs}')
         print()
 
+    def get_lower_bound(self):
+        lower_bounds = []
+        for machine_nr, machine in enumerate(self.machines):
+            def preprocessing_time(job):
+                return sum(self.processing_times[(machine, job)] for machine in self.machines[:machine_nr])
+
+            def postprocessing_time(job):
+                return sum(self.processing_times[(machine, job)] for machine in self.machines[machine_nr+1:])
+
+            minimal_preprocessing = min(preprocessing_time(job) for job in self.jobs)
+            fastest_arriving_jobs = [job for job in self.jobs if preprocessing_time(job) == minimal_preprocessing]
+
+            minimal_postprocessing = min(postprocessing_time(job) for job in self.jobs)
+            fastest_leaving_jobs = [job for job in self.jobs if postprocessing_time(job) == minimal_postprocessing]
+
+            machine_working_time = sum(self.processing_times[(machine, job)] for job in self.jobs)
+
+            lower_bound = minimal_preprocessing + machine_working_time + minimal_postprocessing
+            lower_bounds.append(lower_bound)
+
+        return max(lower_bounds)
+
     def print_info(self):
         print(f'Machines: {len(self.machines)}')
         print(f'Jobs: {len(self.jobs)}')
@@ -96,6 +118,9 @@ def solve_ordering(instance):
     last_machine = instance.machines[-1]
     for job in instance.jobs:
         model.addConstr(makespan_var >= instance.processing_times[(last_machine, job)] + starting_times_vars[(last_machine, job)])
+
+    # Lower bound constraint
+    model.addConstr(makespan_var >= instance.get_lower_bound())
 
     model.setParam('TimeLimit', 10)
     model.optimize()  # Solve the model
