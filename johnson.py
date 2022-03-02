@@ -1,3 +1,4 @@
+from util import basic_solution
 from collections import defaultdict
 
 """Implementation of Johnson's rule for m machines"""
@@ -65,4 +66,15 @@ def permutation_to_order_vars(permutation):
             order_vars[j-1][jafter-1] = 1
 
     return order_vars
+
+
+def johnson_meta(instance):
+    permutations = johnson_heuristic_meta(instance.processing_times)
+    # get best permutation
+    makespans = [basic_solution(instance, job_order=p)[1] for p in permutations]
+    best = makespans.index(min(makespans))
+    permutation = permutations[best]
+    starting_times_johnson, makespan, _ = basic_solution(instance, job_order=permutation)
+    ordering_vars_johnson = permutation_to_order_vars(permutation)
+    return ordering_vars_johnson, best, starting_times_johnson
 

@@ -14,4 +14,4 @@ def main(n=None):
 
 
 if __name__ == '__main__':
-    main()
+    main(n=1)
