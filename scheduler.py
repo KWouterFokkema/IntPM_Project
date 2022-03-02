@@ -5,15 +5,12 @@ import re
 import ast
 import itertools
 
-from sympy import per
-
 import johnson
 
 
 class Instance:
     def __init__(self, filename):
         name = filename.split('\\')[-1].replace('.py', '')
-        print(f'Instance {name}')
         self.name = name
 
         with open(filename) as f:
@@ -80,6 +77,7 @@ class Instance:
 
 # Solves the problem exactly using binary ordering variables
 def solve_ordering(instance):
+    use_indicator = True
     model = gb.Model()
 
     makespan_var = model.addVar(obj=1)
@@ -101,8 +99,13 @@ def solve_ordering(instance):
             order_var = model.addVar(name=f'order ({machine}, {job_1}, {job_2})', vtype=gb.GRB.BINARY)
             order_vars[(machine, job_1, job_2)] = order_var
             order_vars[(machine, job_2, job_1)] = 1 - order_var
-            model.addConstr((order_var == 1) >> (starting_times_vars[(machine, job_1)] + instance.processing_times[(machine, job_1)] <= starting_times_vars[(machine, job_2)]))
-            model.addConstr((order_var == 0) >> (starting_times_vars[(machine, job_2)] + instance.processing_times[(machine, job_2)] <= starting_times_vars[(machine, job_1)]))
+            if use_indicator:
+                model.addConstr((order_var == 1) >> (starting_times_vars[(machine, job_1)] + instance.processing_times[(machine, job_1)] <= starting_times_vars[(machine, job_2)]))
+                model.addConstr((order_var == 0) >> (starting_times_vars[(machine, job_2)] + instance.processing_times[(machine, job_2)] <= starting_times_vars[(machine, job_1)]))
+            else:
+                pass
+                # model.addConstr(starting_times_vars[(machine, job_1)] + instance.processing_times[(machine, job_1)] <= starting_times_vars[(machine, job_2)] + M * )
+                # model.addConstr(starting_times_vars[(machine, job_2)] + instance.processing_times[(machine, job_2)] <= starting_times_vars[(machine, job_1)] + M * )
 
     for (job_1, job_2) in itertools.combinations(instance.jobs, 2):
         order_vars[(instance.machines[0], job_1, job_2)] = order_vars[(instance.machines[1], job_1, job_2)]
@@ -126,6 +129,7 @@ def solve_ordering(instance):
     # Lower bound constraint
     model.addConstr(makespan_var >= instance.get_lower_bound())
 
+    # model.setParam('LogToConsole', False)
     model.setParam('TimeLimit', 10)
     model.optimize()  # Solve the model
 
@@ -202,6 +206,7 @@ def solve_ordered(instance):
 
     model.addConstr(virtual_starting_time_vars[(last_machine, last_virtual_job)] + virtual_processing_time_vars[(last_machine, last_virtual_job)] <= makespan_var)
 
+    # model.setParam('LogToConsole', False)
     model.setParam('TimeLimit', 10)
     model.optimize()  # Solve the model
 
@@ -212,7 +217,7 @@ def solve_ordered(instance):
         for job in instance.jobs:
             starting_times[(machine, job)] = sum(job_permutation_vars[(job, virtual_job)].x * virtual_starting_time_vars[(machine, virtual_job)].x for virtual_job in instance.jobs)
 
-    return starting_times, makespan_var.x, False  # The second parameter is False because the solution is heuristic and not necessarily optimal
+    return starting_times, makespan_var.x, round(model.objVal) == instance.get_lower_bound()  # The second parameter is False because the solution is heuristic and not necessarily optimal
 
 
 # The following works, but is very slow.
@@ -302,9 +307,9 @@ def solve_permutation(instance):
     model.addConstr(makespan_var == virtual_starting_time_vars[(instance.machines[-1], instance.jobs[-1])] + virtual_processing_time_vars[(instance.machines[-1], instance.jobs[-1])])
 
     model.update()
-    model.setParam('TimeLimit', 100)
+    # model.setParam('LogToConsole', False)
+    model.setParam('TimeLimit', 10)
     model.optimize()  # Solve the model
-
     # Retrieve job starting times from the model
     starting_times = {}
 
@@ -342,6 +347,8 @@ def basic_solution(instance, job_order=None):
 def visualize(instance, starting_times, optimal=False):
     assert (all((machine, job) in starting_times for machine in instance.machines for job in instance.jobs))
 
+    makespan = max(starting_times[(instance.machines[-1], job)] + instance.processing_times[(instance.machines[-1], job)] for job in instance.jobs)
+
     color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
     fig, ax = plt.subplots(figsize=[6.4*2, 4.8])
@@ -359,6 +366,7 @@ def visualize(instance, starting_times, optimal=False):
 
     plt.xlabel('Time')
     plt.ylabel('Machines')
+    plt.title(f'Makespan = {makespan}')
     plt.savefig(fr'solutions\last\{instance.name}.png')
     if optimal:
         plt.savefig(fr'solutions\optimal\{instance.name}.png')
