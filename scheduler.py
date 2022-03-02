@@ -5,6 +5,8 @@ import re
 import ast
 import itertools
 
+import johnson
+
 
 class Instance:
     def __init__(self, filename):
