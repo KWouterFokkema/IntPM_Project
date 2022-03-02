@@ -347,7 +347,7 @@ def basic_solution(instance, job_order=None):
 def visualize(instance, starting_times, optimal=False):
     assert (all((machine, job) in starting_times for machine in instance.machines for job in instance.jobs))
 
-    makespan = max(starting_times[(instance.machines[-1], job)] + instance.processing_times[(instance.machines[-1], job)] for job in instance.jobs)
+    makespan = round(max(starting_times[(instance.machines[-1], job)] + instance.processing_times[(instance.machines[-1], job)] for job in instance.jobs))
 
     color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
