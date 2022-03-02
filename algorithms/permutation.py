@@ -18,7 +18,9 @@ def solve_permutation(instance):
     for machine in instance.machines:
         for virtual_job in instance.jobs:
             for job in instance.jobs:
-                job_permutation_vars[(machine, job, virtual_job)] = model.addVar(vtype=gb.GRB.BINARY)
+                job_permutation_vars[(machine, job, virtual_job)] = model.addVar(
+                    vtype=gb.GRB.BINARY
+                )
 
     for machine in instance.machines:
         for virtual_job in instance.jobs:
@@ -39,66 +41,121 @@ def solve_permutation(instance):
     for machine in instance.machines:
         for job in instance.jobs:
             for virtual_job in instance.jobs:
-                model.addConstr((job_permutation_vars[(machine, job, virtual_job)] == 1) >> (starting_time_vars[(machine, job)] == virtual_starting_time_vars[(machine, virtual_job)]))
+                model.addConstr(
+                    (job_permutation_vars[(machine, job, virtual_job)] == 1)
+                    >> (
+                        starting_time_vars[(machine, job)]
+                        == virtual_starting_time_vars[(machine, virtual_job)]
+                    )
+                )
 
     # Permutation equalities
     for machine in instance.machines:
         for job in instance.jobs:
-            model.addConstr(sum(job_permutation_vars[(machine, job, virtual_job)] for virtual_job in instance.jobs) == 1)
+            model.addConstr(
+                sum(
+                    job_permutation_vars[(machine, job, virtual_job)]
+                    for virtual_job in instance.jobs
+                )
+                == 1
+            )
     for machine in instance.machines:
         for virtual_job in instance.jobs:
-            model.addConstr(sum(job_permutation_vars[(machine, job, virtual_job)] for job in instance.jobs) == 1)
+            model.addConstr(
+                sum(
+                    job_permutation_vars[(machine, job, virtual_job)]
+                    for job in instance.jobs
+                )
+                == 1
+            )
 
     # Processing time equalities
     for virtual_job in instance.jobs:
         for machine in instance.machines:
-            model.addConstr(virtual_processing_time_vars[(machine, virtual_job)] == sum(job_permutation_vars[(machine, job, virtual_job)] * instance.processing_times[(machine, job)] for job in instance.jobs))
+            model.addConstr(
+                virtual_processing_time_vars[(machine, virtual_job)]
+                == sum(
+                    job_permutation_vars[(machine, job, virtual_job)]
+                    * instance.processing_times[(machine, job)]
+                    for job in instance.jobs
+                )
+            )
 
     # Starting time inequalities between jobs on the same machine
     for machine in instance.machines:
         for virtual_job, previous_virtual_job in zip(instance.jobs[1:], instance.jobs):
             if previous_virtual_job is None:
                 continue
-            model.addConstr(virtual_starting_time_vars[machine, virtual_job] >= virtual_starting_time_vars[machine, previous_virtual_job] + virtual_processing_time_vars[machine, previous_virtual_job])
+            model.addConstr(
+                virtual_starting_time_vars[machine, virtual_job]
+                >= virtual_starting_time_vars[machine, previous_virtual_job]
+                + virtual_processing_time_vars[machine, previous_virtual_job]
+            )
 
     # Starting time inequalities between the same job on adjacent machines
     for machine, previous_machine in zip(instance.machines[1:], instance.machines):
         for job in instance.jobs:
-            model.addConstr(starting_time_vars[(machine, job)] >= starting_time_vars[(previous_machine, job)] + instance.processing_times[(previous_machine, job)])
+            model.addConstr(
+                starting_time_vars[(machine, job)]
+                >= starting_time_vars[(previous_machine, job)]
+                + instance.processing_times[(previous_machine, job)]
+            )
 
     # Order equations first two machines
     for virtual_job in instance.jobs:
         for job in instance.jobs:
-            model.addConstr(job_permutation_vars[(instance.machines[0], job, virtual_job)] == job_permutation_vars[(instance.machines[1], job, virtual_job)])
+            model.addConstr(
+                job_permutation_vars[(instance.machines[0], job, virtual_job)]
+                == job_permutation_vars[(instance.machines[1], job, virtual_job)]
+            )
 
     # Order equations last two machines
     for virtual_job in instance.jobs:
         for job in instance.jobs:
-            model.addConstr(job_permutation_vars[(instance.machines[-2], job, virtual_job)] == job_permutation_vars[(instance.machines[-1], job, virtual_job)])
+            model.addConstr(
+                job_permutation_vars[(instance.machines[-2], job, virtual_job)]
+                == job_permutation_vars[(instance.machines[-1], job, virtual_job)]
+            )
 
     # Starting time equations first and last machine
     for machine in (instance.machines[0], instance.machines[-1]):
         for virtual_job, previous_virtual_job in zip(instance.jobs[1:], instance.jobs):
-            model.addConstr(virtual_starting_time_vars[(machine, virtual_job)] == virtual_starting_time_vars[(machine, previous_virtual_job)] + virtual_processing_time_vars[(machine, previous_virtual_job)])
+            model.addConstr(
+                virtual_starting_time_vars[(machine, virtual_job)]
+                == virtual_starting_time_vars[(machine, previous_virtual_job)]
+                + virtual_processing_time_vars[(machine, previous_virtual_job)]
+            )
 
     # Starting time equality
-    model.addConstr(virtual_starting_time_vars[(instance.machines[0], instance.jobs[0])] == 0)
+    model.addConstr(
+        virtual_starting_time_vars[(instance.machines[0], instance.jobs[0])] == 0
+    )
 
     # Makespan equality
-    model.addConstr(makespan_var == virtual_starting_time_vars[(instance.machines[-1], instance.jobs[-1])] + virtual_processing_time_vars[(instance.machines[-1], instance.jobs[-1])])
+    model.addConstr(
+        makespan_var
+        == virtual_starting_time_vars[(instance.machines[-1], instance.jobs[-1])]
+        + virtual_processing_time_vars[(instance.machines[-1], instance.jobs[-1])]
+    )
 
     model.update()
     # model.setParam('LogToConsole', False)
-    model.setParam('TimeLimit', 10)
+    model.setParam("TimeLimit", 10)
     model.optimize()  # Solve the model
     # Retrieve job starting times from the model
     starting_times = {}
 
     for machine in instance.machines:
         for job in instance.jobs:
-            starting_times[(machine, job)] = starting_time_vars[(machine, job)].getValue()
+            starting_times[(machine, job)] = starting_time_vars[
+                (machine, job)
+            ].getValue()
 
-    return starting_times, makespan_var.x, model.Status == gb.GRB.OPTIMAL  # If the model is optimal, the solution is optimal
+    return (
+        starting_times,
+        makespan_var.x,
+        model.Status == gb.GRB.OPTIMAL,
+    )  # If the model is optimal, the solution is optimal
 
 
 # Solves the scheduling problem assuming the permutation of the jobs does not change between machines
@@ -130,40 +187,73 @@ def solve_permutation_fixed(instance):
 
     # Each job occurs once in the permutation
     for job in instance.jobs:
-        model.addConstr(sum(job_permutation_vars[(job, virtual_job)] for virtual_job in instance.jobs) == 1)
+        model.addConstr(
+            sum(
+                job_permutation_vars[(job, virtual_job)]
+                for virtual_job in instance.jobs
+            )
+            == 1
+        )
 
     # Each virtual job occurs once in the permutation
     for virtual_job in instance.jobs:
-        model.addConstr(sum(job_permutation_vars[(job, virtual_job)] for job in instance.jobs) == 1)
+        model.addConstr(
+            sum(job_permutation_vars[(job, virtual_job)] for job in instance.jobs) == 1
+        )
 
     # Constraints to model the processing times of virtual jobs
     for virtual_job in instance.jobs:
         for machine in instance.machines:
-            model.addConstr(virtual_processing_time_vars[(machine, virtual_job)] == sum(job_permutation_vars[(job, virtual_job)] * instance.processing_times[(machine, job)] for job in instance.jobs))
+            model.addConstr(
+                virtual_processing_time_vars[(machine, virtual_job)]
+                == sum(
+                    job_permutation_vars[(job, virtual_job)]
+                    * instance.processing_times[(machine, job)]
+                    for job in instance.jobs
+                )
+            )
 
     # For the first machine, the starting time is 0 or the finishing time of the previous job
     first_machine = instance.machines[0]
     for virtual_job, previous_job in zip(instance.jobs, [None] + instance.jobs):
         if previous_job is None:
-            model.addConstr(virtual_starting_time_vars[(first_machine, virtual_job)] == 0)
+            model.addConstr(
+                virtual_starting_time_vars[(first_machine, virtual_job)] == 0
+            )
         else:
-            model.addConstr(virtual_starting_time_vars[(first_machine, virtual_job)] == virtual_starting_time_vars[(first_machine, previous_job)] + virtual_processing_time_vars[(first_machine, previous_job)])
+            model.addConstr(
+                virtual_starting_time_vars[(first_machine, virtual_job)]
+                == virtual_starting_time_vars[(first_machine, previous_job)]
+                + virtual_processing_time_vars[(first_machine, previous_job)]
+            )
 
     # For all other machines, the job can only start if both the job and the machine are available.
     for virtual_job, previous_job in zip(instance.jobs, [None] + instance.jobs):
         for machine, previous_machine in zip(instance.machines[1:], instance.machines):
             if previous_job is not None:
-                model.addConstr(virtual_starting_time_vars[(machine, virtual_job)] >= virtual_starting_time_vars[(machine, previous_job)] + virtual_processing_time_vars[(machine, previous_job)])
-            model.addConstr(virtual_starting_time_vars[(machine, virtual_job)] >= virtual_starting_time_vars[(previous_machine, virtual_job)] + virtual_processing_time_vars[(previous_machine, virtual_job)])
+                model.addConstr(
+                    virtual_starting_time_vars[(machine, virtual_job)]
+                    >= virtual_starting_time_vars[(machine, previous_job)]
+                    + virtual_processing_time_vars[(machine, previous_job)]
+                )
+            model.addConstr(
+                virtual_starting_time_vars[(machine, virtual_job)]
+                >= virtual_starting_time_vars[(previous_machine, virtual_job)]
+                + virtual_processing_time_vars[(previous_machine, virtual_job)]
+            )
 
     # The makespan needs to be equal to the finishing time of the last virtual job
     last_machine = instance.machines[-1]
     last_virtual_job = instance.jobs[-1]
 
-    model.addConstr(virtual_starting_time_vars[(last_machine, last_virtual_job)] + virtual_processing_time_vars[(last_machine, last_virtual_job)] <= makespan_var)
+    model.addConstr(
+        virtual_starting_time_vars[(last_machine, last_virtual_job)]
+        + virtual_processing_time_vars[(last_machine, last_virtual_job)]
+        <= makespan_var
+    )
 
     # model.setParam('LogToConsole', False)
-    model.setParam('TimeLimit', 10)
+    model.setParam("TimeLimit", 10)
     model.optimize()  # Solve the model
 
     # Retrieve job starting times from the model
@@ -171,7 +261,16 @@ def solve_permutation_fixed(instance):
 
     for machine in instance.machines:
         for job in instance.jobs:
-            starting_times[(machine, job)] = sum(job_permutation_vars[(job, virtual_job)].x * virtual_starting_time_vars[(machine, virtual_job)].x for virtual_job in instance.jobs)
+            starting_times[(machine, job)] = sum(
+                job_permutation_vars[(job, virtual_job)].x
+                * virtual_starting_time_vars[(machine, virtual_job)].x
+                for virtual_job in instance.jobs
+            )
 
     # The second parameter is False because the solution is heuristic and not necessarily optimal
-    return starting_times, makespan_var.x, round(model.objVal) == instance.get_lower_bound() 
+    return (
+        starting_times,
+        makespan_var.x,
+        round(model.objVal) == instance.get_lower_bound(),
+    )
+
