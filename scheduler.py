@@ -5,6 +5,8 @@ import re
 import ast
 import itertools
 
+from sympy import per
+
 import johnson
 
 
@@ -136,7 +138,7 @@ def solve_ordering(instance):
         for job in instance.jobs:
             starting_times[(machine, job)] = starting_times_vars[(machine, job)].x
 
-    return starting_times, model.Status == gb.GRB.OPTIMAL  # If the model is optimal, the solution is optimal
+    return starting_times, round(makespan_var.x), model.Status == gb.GRB.OPTIMAL  # If the model is optimal, the solution is optimal
 
 
 # Solves the scheduling problem assuming the permutation of the jobs does not change between machines
@@ -210,7 +212,7 @@ def solve_ordered(instance):
         for job in instance.jobs:
             starting_times[(machine, job)] = sum(job_permutation_vars[(job, virtual_job)].x * virtual_starting_time_vars[(machine, virtual_job)].x for virtual_job in instance.jobs)
 
-    return starting_times, False  # The second parameter is False because the solution is heuristic and not necessarily optimal
+    return starting_times, makespan_var.x, False  # The second parameter is False because the solution is heuristic and not necessarily optimal
 
 
 # The following works, but is very slow.
@@ -310,7 +312,7 @@ def solve_permutation(instance):
         for job in instance.jobs:
             starting_times[(machine, job)] = starting_time_vars[(machine, job)].getValue()
 
-    return starting_times, model.Status == gb.GRB.OPTIMAL  # If the model is optimal, the solution is optimal
+    return starting_times, makespan_var.x, model.Status == gb.GRB.OPTIMAL  # If the model is optimal, the solution is optimal
 
 
 # Heuristic using the given (or standard) job order
@@ -331,9 +333,10 @@ def basic_solution(instance, job_order=None):
             job_finished = 0 if previous_machine is None else ending_time(previous_machine, job)
             starting_times[(machine, job)] = max(machine_finished, job_finished)
 
-    print(f'Heuristic solution value: {ending_time(instance.machines[-1],job_order[-1])}')
+    #print(f'Heuristic solution value: {ending_time(instance.machines[-1],job_order[-1])}')
+    makespan= ending_time(instance.machines[-1], job_order[-1])
 
-    return starting_times, False
+    return starting_times, makespan, False
 
 
 def visualize(instance, starting_times, optimal=False):
@@ -363,10 +366,22 @@ def visualize(instance, starting_times, optimal=False):
     plt.close()
 
 
+def johnson_meta(instance):
+    # Quick-n-dirty just to test: use Johnson
+    permutations = johnson.johnson_heuristic_meta(instance.processing_times)
+    # get best permutation
+    makespans = [basic_solution(instance, job_order=p)[1] for p in permutations]
+    best = makespans.index(min(makespans))
+    permutation = permutations[best]
+    starting_times_johnson, makespan, _ = basic_solution(instance, job_order=permutation)
+    ordering_vars_johnson = johnson.permutation_to_order_vars(permutation)
+    return ordering_vars_johnson, best, starting_times_johnson
+
+
 def main(input_path):
     instance = Instance(input_path)
     instance.print_lower_bounds()
-    starting_times, optimal = solve_ordering(instance)
+    starting_times, makespan, optimal = solve_ordering(instance)
     visualize(instance, starting_times, optimal=optimal)
 
 

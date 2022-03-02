@@ -47,6 +47,15 @@ def johnson_heuristic(processing_times, pivot=None, between=True):
     return schedule_head + schedule_tail
 
 
+def johnson_heuristic_meta(processing_times):
+    machines = len(set([e[0] for e in processing_times.keys()]))
+    schedules = []
+    for flag in [True, False]:
+        for pivot in range(1, machines+1):
+            schedules.append(johnson_heuristic(processing_times, pivot=pivot, between=flag))
+    return schedules
+
+
 def permutation_to_order_vars(permutation):
     num_jobs = max(permutation)
     order_vars = [[0 for _ in range(num_jobs)] for _ in range(num_jobs)]
