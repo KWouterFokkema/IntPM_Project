@@ -2,7 +2,10 @@ import gurobipy as gb
 
 
 # The following works, but is very slow.
-def solve_permutation(instance):
+def solve_permutation(instance, verbose=True, use_indicator=True, time_limit=10):
+    if not use_indicator:
+        raise NotImplementedError
+
     model = gb.Model()
 
     # Add variables to the model
@@ -139,8 +142,10 @@ def solve_permutation(instance):
     )
 
     model.update()
-    # model.setParam('LogToConsole', False)
-    model.setParam("TimeLimit", 10)
+
+    if not verbose:
+        model.setParam('LogToConsole', False)
+    model.setParam("TimeLimit", time_limit)
     model.optimize()  # Solve the model
     # Retrieve job starting times from the model
     starting_times = {}
@@ -153,13 +158,16 @@ def solve_permutation(instance):
 
     return (
         starting_times,
-        makespan_var.x,
+        round(makespan_var.x),
         model.Status == gb.GRB.OPTIMAL,
     )  # If the model is optimal, the solution is optimal
 
 
 # Solves the scheduling problem assuming the permutation of the jobs does not change between machines
-def solve_permutation_fixed(instance):
+def solve_permutation_fixed(instance, verbose=True, use_indicator=True, time_limit=10):
+    if not use_indicator:
+        raise NotImplementedError
+
     model = gb.Model()
 
     # Add variables to the model
@@ -252,8 +260,9 @@ def solve_permutation_fixed(instance):
         <= makespan_var
     )
 
-    # model.setParam('LogToConsole', False)
-    model.setParam("TimeLimit", 10)
+    if not verbose:
+        model.setParam('LogToConsole', False)
+    model.setParam("TimeLimit", time_limit)
     model.optimize()  # Solve the model
 
     # Retrieve job starting times from the model
@@ -267,10 +276,15 @@ def solve_permutation_fixed(instance):
                 for virtual_job in instance.jobs
             )
 
-    # The second parameter is False because the solution is heuristic and not necessarily optimal
+    if instance.lower_bound:
+        optimal = round(model.objVal) == instance.lower_bound
+    else:
+        optimal = False
+
+    # The third parameter indicates whether the solution is optimal.
     return (
         starting_times,
-        makespan_var.x,
-        round(model.objVal) == instance.get_lower_bound(),
+        round(makespan_var.x),
+        optimal,
     )
 
