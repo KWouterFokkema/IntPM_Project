@@ -2,30 +2,28 @@ from util import basic_solution
 from collections import defaultdict
 
 """Implementation of Johnson's rule for m machines"""
-def virtual_processing_times(processing_times, pivot=None, between=True):
-    """processing_times: dict, key = (machine, job)"""
-    # extract job names
-    jobs = set([e[1] for e in processing_times.keys()])
-    machines = set([e[0] for e in processing_times.keys()])
-    num_machines = len(machines)
+def virtual_processing_times(instance, pivot=None, between=True):
+    num_machines = len(instance.machines)
 
     if pivot is None:
         pivot = num_machines//2
 
     ps = defaultdict(int)
 
-    for machine in range(pivot - int(not between)):
-        for job in jobs:
-            ps[(1, job)] += processing_times[(machine+1, job)]
-    for machine in range(pivot+1, num_machines):
-        for job in jobs:
-            ps[(2, job)] += processing_times[(machine+1, job)]
+    for job in instance.jobs:
+        ps[(1, job)] = sum(instance.processing_times[(machine + 1, job)]
+                           for machine in range(pivot - int(not between))
+                           )
+
+        ps[(2, job)] = sum(instance.processing_times[(machine + 1, job)]
+                           for machine in range(pivot+1, num_machines)
+                           )
 
     return ps
 
 
-def johnson_heuristic(processing_times, pivot=None, between=True):
-    ps = virtual_processing_times(processing_times, pivot=pivot, between=between)
+def johnson_heuristic(instance, pivot=None, between=True):
+    ps = virtual_processing_times(instance, pivot=pivot, between=between)
 
     # change ps into a list of tuples (p, machine, job) and sort by p
     ps_tuples = sorted([(p, *k) for k, p in ps.items()])
@@ -34,26 +32,28 @@ def johnson_heuristic(processing_times, pivot=None, between=True):
     seen = set()
 
     schedule_head = []
-    schedule_tail = []
+    schedule_tail_reversed = []
 
     # compute johnson's rule w.r.t. virtual machines
     for (_, m, j) in ps_tuples:
-        if m == 1 and j not in seen:
+        if j in seen:
+            continue
+
+        if m == 1:
             schedule_head.append(j)
-            seen.add(j)
-        if m == 2 and j not in seen:
-            schedule_tail.insert(0, j)
-            seen.add(j)
+        elif m == 2:
+            schedule_tail_reversed.append(j)
 
-    return schedule_head + schedule_tail
+        seen.add(j)
+
+    return schedule_head + list(reversed(schedule_tail_reversed))
 
 
-def johnson_heuristic_meta(processing_times):
-    machines = len(set([e[0] for e in processing_times.keys()]))
+def johnson_heuristic_meta(instance):
     schedules = []
     for flag in [True, False]:
-        for pivot in range(1, machines+1):
-            schedules.append(johnson_heuristic(processing_times, pivot=pivot, between=flag))
+        for pivot in range(1, len(instance.machines)+1):
+            schedules.append(johnson_heuristic(instance, pivot=pivot, between=flag))
     return schedules
 
 
@@ -69,7 +69,7 @@ def permutation_to_order_vars(permutation):
 
 
 def johnson_meta(instance):
-    permutations = johnson_heuristic_meta(instance.processing_times)
+    permutations = johnson_heuristic_meta(instance)
     # get best permutation
     makespans = [basic_solution(instance, job_order=p)[1] for p in permutations]
     best = makespans.index(min(makespans))
