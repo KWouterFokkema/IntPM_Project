@@ -15,7 +15,11 @@ def solve_ordering(instance, use_indicator=True, verbose=True, time_limit=10):
     for machine in instance.machines:
         for job in instance.jobs:
             starting_times_vars[(machine, job)] = model.addVar(
-                name=f"starting time ({machine}, {job})"
+                name=f"starting time ({machine}, {job})",
+                lb=sum(instance.processing_times[(earlier_machine, job)]
+                       for earlier_machine in instance.machines
+                       if earlier_machine < machine
+                       )
             )
 
     # The job can only start if the job is finished on the previous machine.
@@ -137,7 +141,11 @@ def solve_ordering_fixed(instance, use_indicator=True, verbose=True, time_limit=
     for machine in instance.machines:
         for job in instance.jobs:
             starting_times_vars[(machine, job)] = model.addVar(
-                name=f"starting time ({machine}, {job})"
+                name=f"starting time ({machine}, {job})",
+                lb=sum(instance.processing_times[(earlier_machine, job)]
+                       for earlier_machine in instance.machines
+                       if earlier_machine < machine
+                       )
             )
 
     # The job can only start if the job is finished on the previous machine.
