@@ -20,6 +20,7 @@ class Instance:
         self.processing_times = ast.literal_eval(processing_times_text)
         self.lower_bound = get_lower_bound(self)
         self.upper_bound = None
+        self.best_solution = None
 
     def print_info(self):
         print(f"Machines: {len(self.machines)}")

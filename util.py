@@ -28,9 +28,11 @@ def basic_solution(instance, job_order=None):
             starting_times[(machine, job)] = max(machine_finished, job_finished)
 
     # print(f'Heuristic solution value: {ending_time(instance.machines[-1],job_order[-1])}')
-    makespan = ending_time(instance.machines[-1], job_order[-1])
+    makespan = round(ending_time(instance.machines[-1], job_order[-1]))
 
-    return starting_times, makespan, False
+    if instance.upper_bound is None or makespan < instance.upper_bound:
+        instance.upper_bound = makespan
+        instance.best_solution = starting_times
 
 
 def visualize(instance):
