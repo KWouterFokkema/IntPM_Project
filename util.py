@@ -33,7 +33,9 @@ def basic_solution(instance, job_order=None):
     return starting_times, makespan, False
 
 
-def visualize(instance, starting_times, optimal=False):
+def visualize(instance):
+    assert instance.best_solution
+    starting_times = instance.best_solution
     """Creates a Gantt chart for the given instance and starting times"""
     assert all(
         (machine, job) in starting_times
@@ -70,7 +72,7 @@ def visualize(instance, starting_times, optimal=False):
     plt.ylabel("Machines")
     plt.title(f"Makespan = {makespan}")
     plt.savefig(fr"solutions\last\{instance.name}.png")
-    if optimal:
+    if instance.lower_bound == instance.upper_bound:
         plt.savefig(fr"solutions\optimal\{instance.name}.png")
 
     plt.close()

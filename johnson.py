@@ -2,6 +2,8 @@ from util import basic_solution
 from collections import defaultdict
 
 """Implementation of Johnson's rule for m machines"""
+
+
 def virtual_processing_times(instance, pivot=None, between=True):
     num_machines = len(instance.machines)
 
@@ -76,5 +78,10 @@ def johnson_meta(instance):
     permutation = permutations[best]
     starting_times_johnson, makespan, _ = basic_solution(instance, job_order=permutation)
     ordering_vars_johnson = permutation_to_order_vars(permutation)
+
+    if not instance.upper_bound or best < instance.upper_bound:
+        instance.upper_bound = best
+        instance.best_solution = starting_times_johnson
+
     return ordering_vars_johnson, best, starting_times_johnson
 
