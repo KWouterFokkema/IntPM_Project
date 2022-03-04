@@ -14,6 +14,7 @@ def add_starting_time_variables(model, instance):
                        if earlier_machine < machine
                        )
             )
+            starting_times_vars[(machine, job)].start = instance.best_solution[(machine, job)]
 
     return starting_times_vars
 
@@ -79,7 +80,18 @@ def add_machine_schedule_indicator_constraints(model, instance, starting_times_v
 
 
 def add_machine_schedule_big_m_constraints(model, instance, starting_times_vars, ordering_vars):
-    raise NotImplementedError  # TODO: implement
+    for machine in instance.machines[1:-1]:
+        for (job_1, job_2) in itertools.combinations(instance.jobs, 2):
+            model.addConstr(
+                starting_times_vars[(machine, job_1)]
+                + instance.processing_times[(machine, job_1)]
+                <= starting_times_vars[(machine, job_2)] + (1-ordering_vars[(machine, job_1, job_2)]) * instance.upper_bound
+            )
+            model.addConstr(
+                starting_times_vars[(machine, job_2)]
+                + instance.processing_times[(machine, job_2)]
+                <= starting_times_vars[(machine, job_1)] + ordering_vars[(machine, job_1, job_2)] * instance.upper_bound
+            )
 
 
 def add_fixed_order_constraints(model, instance, ordering_vars):

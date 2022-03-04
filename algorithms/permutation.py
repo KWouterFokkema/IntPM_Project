@@ -66,10 +66,7 @@ def add_starting_time_variables(model, instance):
     return starting_time_vars
 
 
-def add_starting_time_constraints(model, instance, job_permutation_vars, virtual_starting_time_vars, starting_time_vars, use_indicator):
-    if not use_indicator:
-        raise NotImplementedError
-
+def add_starting_time_indicator_constraints(model, instance, job_permutation_vars, virtual_starting_time_vars, starting_time_vars):
     for machine in instance.machines:
         for job in instance.jobs:
             for virtual_job in instance.jobs:
@@ -79,6 +76,22 @@ def add_starting_time_constraints(model, instance, job_permutation_vars, virtual
                         starting_time_vars[(machine, job)]
                         == virtual_starting_time_vars[(machine, virtual_job)]
                     )
+                )
+
+
+def add_starting_time_big_m_constraints(model, instance, job_permutation_vars, virtual_starting_time_vars, starting_time_vars):
+    for machine in instance.machines:
+        for job in instance.jobs:
+            for virtual_job in instance.jobs:
+                model.addConstr(
+                    starting_time_vars[(machine, job)]
+                    <= virtual_starting_time_vars[(machine, virtual_job)]
+                    + (1-job_permutation_vars[(machine, job, virtual_job)]) * instance.upper_bound
+                )
+                model.addConstr(
+                    starting_time_vars[(machine, job)]
+                    >= virtual_starting_time_vars[(machine, virtual_job)]
+                    - (1-job_permutation_vars[(machine, job, virtual_job)]) * instance.upper_bound
                 )
 
 
@@ -246,7 +259,11 @@ def solve_permutation(instance, verbose=True, use_indicator=True, time_limit=10,
     add_starting_time_equalities(model, instance, virtual_starting_time_vars, virtual_processing_time_vars)
     add_makespan_equality(model, instance, virtual_starting_time_vars, virtual_processing_time_vars, makespan_var)
 
-    add_starting_time_constraints(model, instance, job_permutation_vars, virtual_starting_time_vars, starting_time_vars, use_indicator)
+    if use_indicator:
+        add_starting_time_indicator_constraints(model, instance, job_permutation_vars, virtual_starting_time_vars, starting_time_vars)
+    else:
+        add_starting_time_big_m_constraints(model, instance, job_permutation_vars, virtual_starting_time_vars, starting_time_vars)
+
     add_job_permutation_constraints(model, instance, job_permutation_vars)
     add_job_shop_constraints(model, instance, starting_time_vars)
     add_machine_schedule_constraints(model, instance, virtual_starting_time_vars, virtual_processing_time_vars)

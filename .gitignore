@@ -10,3 +10,4 @@ __pycache__/instance.cpython-310.pyc
 __pycache__/util.cpython-310.pyc
 algorithms/__pycache__/ordering.cpython-310.pyc
 algorithms/__pycache__/permutation.cpython-310.pyc
+__pycache__/johnson.cpython-310.pyc

@@ -72,10 +72,5 @@ def permutation_to_order_vars(permutation):
 
 def johnson_meta(instance):
     permutations = johnson_heuristic_meta(instance)
-    # get best permutation
-    makespans = [basic_solution(instance, job_order=p)[1] for p in permutations]
-    best = makespans.index(min(makespans))
-    permutation = permutations[best]
-    basic_solution(instance, job_order=permutation)
-    # ordering_vars_johnson = permutation_to_order_vars(permutation)
-
+    for p in permutations:
+        basic_solution(instance, job_order=p)
