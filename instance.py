@@ -1,6 +1,6 @@
 import re
 import ast
-from util import get_lower_bound
+from util import get_lower_bound, basic_solution
 
 
 class Instance:
@@ -21,6 +21,9 @@ class Instance:
         self.lower_bound = get_lower_bound(self)
         self.upper_bound = None
         self.best_solution = None
+
+        # Compute a poor solution for a rough upper bound
+        basic_solution(self)
 
     def print_info(self):
         print(f"Machines: {len(self.machines)}")
