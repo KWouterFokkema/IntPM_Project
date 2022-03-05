@@ -35,24 +35,7 @@ def basic_solution(instance, job_order=None):
         instance.best_solution = starting_times
 
 
-def visualize(instance):
-    assert instance.best_solution
-    starting_times = instance.best_solution
-    """Creates a Gantt chart for the given instance and starting times"""
-    assert all(
-        (machine, job) in starting_times
-        for machine in instance.machines
-        for job in instance.jobs
-    )
-
-    makespan = round(
-        max(
-            starting_times[(instance.machines[-1], job)]
-            + instance.processing_times[(instance.machines[-1], job)]
-            for job in instance.jobs
-        )
-    )
-
+def draw_gantt(instance, starting_times, makespan=None, show=True):
     color_cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
     fig, ax = plt.subplots(figsize=[6.4 * 2, 4.8])
@@ -73,7 +56,26 @@ def visualize(instance):
     plt.xlabel("Time")
     plt.ylabel("Machines")
     plt.title(f"Makespan = {makespan}")
+    if show:
+        plt.show()
+
+
+def visualize(instance):
+    assert instance.best_solution
+    starting_times = instance.best_solution
+    makespan = instance.upper_bound
+
+    """Creates a Gantt chart for the given instance and starting times"""
+    assert all(
+        (machine, job) in starting_times
+        for machine in instance.machines
+        for job in instance.jobs
+    )
+
+    draw_gantt(instance, starting_times, makespan, show=False)
+
     plt.savefig(fr"solutions\last\{instance.name}.png")
+
     if instance.lower_bound == instance.upper_bound:
         plt.savefig(fr"solutions\optimal\{instance.name}.png")
 
