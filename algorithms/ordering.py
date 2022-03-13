@@ -1,5 +1,6 @@
 import itertools
 import gurobipy as gb
+from util import draw_gantt
 
 
 def add_starting_time_variables(model, instance):
@@ -9,10 +10,7 @@ def add_starting_time_variables(model, instance):
         for job in instance.jobs:
             starting_times_vars[(machine, job)] = model.addVar(
                 name=f"starting time ({machine}, {job})",
-                lb=sum(instance.processing_times[(earlier_machine, job)]
-                       for earlier_machine in instance.machines
-                       if earlier_machine < machine
-                       )
+                lb=instance.minimal_preprocessing[(machine, job)]
             )
             starting_times_vars[(machine, job)].start = instance.best_solution[(machine, job)]
 
@@ -27,6 +25,7 @@ def add_ordering_variables(model, instance):
                 name=f"order ({machine}, {job_1}, {job_2})",
                 vtype=gb.GRB.BINARY
             )
+            order_var.start = 1 if instance.best_solution[(machine, job_1)] < instance.best_solution[(machine, job_2)] else 0
             ordering_vars[(machine, job_1, job_2)] = order_var
             ordering_vars[(machine, job_2, job_1)] = 1 - order_var
 
@@ -138,8 +137,81 @@ def retrieve_solution(instance, starting_times_vars):
     return starting_times
 
 
+def get_cut_generator(instance, starting_times_vars, makespan_var):
+    def cut_generator(model, where):
+        if where != gb.GRB.Callback.MIPNODE:
+            return
+        if model.cbGet(gb.GRB.Callback.MIPNODE_NODCNT) != 0:
+            return
+        x = model.cbGetNodeRel(starting_times_vars)
+        makespan_x = model.cbGetNodeRel(makespan_var)
+
+        def g(machine_job_list, offset, mode):
+            if mode == 'starting':
+                sign = -1
+            elif mode == 'completion':
+                sign = 1
+            else:
+                raise ValueError
+            processing_times_sum = sum(instance.processing_times[mj] for mj in machine_job_list)
+            return (processing_times_sum**2
+                    + sign * sum(instance.processing_times[mj]**2 for mj in machine_job_list)
+                    )/2 + offset * processing_times_sum
+
+        # Machine schedule cuts
+        for machine in instance.machines:
+            machine_order = sorted([(machine, job) for job in instance.jobs], key=x.__getitem__)
+            worst_violation = 0
+            worst_k = None
+            starting_time_offset = None
+
+            for k, machine_job in enumerate(machine_order):
+                if starting_time_offset is None:
+                    starting_time_offset = instance.minimal_preprocessing[machine_job]
+                else:
+                    starting_time_offset = min(starting_time_offset, instance.minimal_preprocessing[machine_job])
+
+                violation = g(machine_order[:k+1], starting_time_offset, 'starting') - sum(instance.processing_times[mj] * x[mj] for mj in machine_order[:k+1])
+                if violation > worst_violation:
+                    worst_violation = violation
+                    worst_k = k
+
+            if round(worst_violation) > 0:
+                # print(f"*Adding machine schedule cut for {worst_k+1} jobs on machine {machine}, {worst_violation=}*")
+                model.cbCut(sum(starting_times_vars[mj] * instance.processing_times[mj] for mj in machine_order[:worst_k+1])
+                            >=
+                            g(machine_order[:worst_k+1], min(instance.minimal_preprocessing[mj] for mj in machine_order[:worst_k+1]), 'starting'))
+
+        # Reverse machine schedule cuts
+        for machine in instance.machines:
+            machine_order = sorted([(machine, job) for job in instance.jobs], key=x.__getitem__, reverse=True)
+            worst_violation = 0
+            worst_k = None
+            finishing_time_offset = None
+
+            for k, machine_job in enumerate(machine_order):
+                if finishing_time_offset is None:
+                    finishing_time_offset = instance.minimal_postprocessing[machine_job]
+                else:
+                    finishing_time_offset = min(finishing_time_offset, instance.minimal_postprocessing[machine_job])
+
+                violation = g(machine_order[:k+1], finishing_time_offset, 'completion') - sum(instance.processing_times[mj] * (makespan_x - x[mj]) for mj in machine_order[:k+1])
+                if violation > worst_violation:
+                    worst_violation = violation
+                    worst_k = k
+
+            if round(worst_violation) > 0:
+                # print(f"*Adding reverse machine schedule cut for {worst_k+1} jobs on machine {machine}, {worst_violation=}*")
+                model.cbCut(sum((makespan_var - starting_times_vars[mj]) * instance.processing_times[mj] for mj in machine_order[:worst_k+1])
+                            >=
+                            g(machine_order[:worst_k+1], min(instance.minimal_postprocessing[mj] for mj in machine_order[:worst_k+1]), 'completion'))
+
+        # draw_gantt(instance, x, show=True)
+    return cut_generator
+
+
 # Solves the problem using binary ordering variables
-def solve_ordering(instance, use_indicator=True, verbose=True, time_limit=10, fixed_order=False):
+def solve_ordering(instance, use_indicator=True, verbose=True, time_limit=10, fixed_order=False, use_cuts=False):
     model = gb.Model()
 
     makespan_var = model.addVar(obj=1, lb=instance.lower_bound or 0)
@@ -158,12 +230,16 @@ def solve_ordering(instance, use_indicator=True, verbose=True, time_limit=10, fi
     if fixed_order:
         add_fixed_order_constraints(model, instance, ordering_vars)
 
-    # TODO: add cutting planes
-
     if not verbose:
         model.setParam('LogToConsole', False)
     model.setParam("TimeLimit", time_limit)
-    model.optimize()  # Solve the model
+
+    if use_cuts:
+        model.setParam('PreCrush', False)
+        cut_generator = get_cut_generator(instance, starting_times_vars, makespan_var)
+        model.optimize(cut_generator)  # Solve the model with cutting plane callback
+    else:
+        model.optimize()  # Solve the model
 
     # Retrieve job starting times from the model
     solution = retrieve_solution(instance, starting_times_vars)
@@ -175,6 +251,6 @@ def solve_ordering(instance, use_indicator=True, verbose=True, time_limit=10, fi
 
     if not fixed_order:
         lower_bound = round(model.ObjBound)
-        if not instance.lower_bound or lower_bound < instance.lower_bound:
+        if not instance.lower_bound or lower_bound > instance.lower_bound:
             instance.lower_bound = lower_bound
 

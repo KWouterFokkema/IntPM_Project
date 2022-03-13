@@ -1,5 +1,7 @@
 import re
 import ast
+
+import instances.instance_04_20_08
 from util import get_lower_bound, basic_solution
 
 
@@ -24,6 +26,24 @@ class Instance:
 
         # Compute a poor solution for a rough upper bound
         basic_solution(self)
+
+        self.minimal_preprocessing = {
+            (machine, job): sum(self.processing_times[(earlier_machine, job)]
+                                for earlier_machine in self.machines
+                                if earlier_machine < machine
+                                )
+            for machine in self.machines
+            for job in self.jobs
+        }
+
+        self.minimal_postprocessing = {
+            (machine, job): sum(self.processing_times[(later_machine, job)]
+                                for later_machine in self.machines
+                                if later_machine > machine
+                                )
+            for machine in self.machines
+            for job in self.jobs
+        }
 
     def print_info(self):
         print(f"Machines: {len(self.machines)}")

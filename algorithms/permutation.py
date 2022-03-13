@@ -243,9 +243,9 @@ def retrieve_solution_fixed_order(instance, virtual_starting_time_vars, job_perm
 
 
 # Solves the problem using permutation variables
-def solve_permutation(instance, verbose=True, use_indicator=True, time_limit=10, fixed_order=False):
+def solve_permutation(instance, verbose=True, use_indicator=True, time_limit=10, fixed_order=False, use_cuts=None):
     if fixed_order:
-        solve_permutation_fixed(instance, verbose=verbose, time_limit=time_limit)
+        return solve_permutation_fixed(instance, verbose=verbose, time_limit=time_limit)
 
     model = gb.Model()
 
@@ -282,7 +282,7 @@ def solve_permutation(instance, verbose=True, use_indicator=True, time_limit=10,
         instance.upper_bound = upper_bound
         instance.best_solution = solution
 
-    if not instance.lower_bound or lower_bound < instance.lower_bound:
+    if not instance.lower_bound or lower_bound > instance.lower_bound:
         instance.lower_bound = lower_bound
 
 
